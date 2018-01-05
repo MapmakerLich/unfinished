@@ -1,19 +1,22 @@
 #include <SFML\Graphics.hpp>
 #include <SFML\Window.hpp>
 #include <SFML\System.hpp>
-#include <SFML\Audio.hpp>
+#include <string>
 #include <cmath>
+#include <vector>
 #include <iostream>
 
 constexpr float GRAVITY = 10.0;
-constexpr float JUMP_START = -40.0;
-constexpr unsigned WINDOW_HEIGHT = 480;
-constexpr unsigned WINDOW_WIDTH = 640;
+constexpr float JUMP_START = -50.0;
+const sf::Vector2f GRENADE_MULTIPILER = {-3.f, -1.f};
+const sf::Vector2f HEAP = {800, 800};
+constexpr unsigned WINDOW_HEIGHT = 600;
+constexpr unsigned WINDOW_WIDTH = 800;
 constexpr unsigned MAX_HAND_ANGLE = 85;
-constexpr float botSpawnTime = 10.0;
-sf::Vector2f spawnPoint = {100, 430};
+constexpr float BOT_SPAWN_TIME = 10.0;
+sf::Vector2f SPAWN_POINTS[5] = {{100, 560}, {0, 0}, {0, 0}, {0, 0}, {0, 0}};
 
-struct Ezbot
+struct easyBot
 {
     sf::Texture texture;
     sf::Sprite sprite;
@@ -21,7 +24,7 @@ struct Ezbot
     sf::Vector2f speed;
     float time = 0;
     bool isAlive;
-    sf::Vector2f distanse;
+    sf::Vector2f distance;
 };
 
 struct Character
@@ -38,7 +41,7 @@ struct Character
     float startY;
     float angle;
     float immuneTime = 0;
-    int life_count;
+    int lifeCount;
 };
 
 struct Grenade
@@ -49,7 +52,6 @@ struct Grenade
     sf::Vector2f speed;
     float time = 0;
     bool isFlying;
-    bool isStartAngleChanged;
 };
 
 void jumping(Character &character, float deltaTime, int &isJumped)
@@ -57,7 +59,7 @@ void jumping(Character &character, float deltaTime, int &isJumped)
     character.time += deltaTime * 10;
     float nextY = character.startY + JUMP_START * character.time + GRAVITY * std::pow(character.time, 2) * 0.5;
     character.position.y = nextY;
-    if (character.position.y >= WINDOW_HEIGHT - 50)
+    if (character.position.y >= WINDOW_HEIGHT - character.texture.getSize().y / 2)
     {
         character.time = 0;
         isJumped = 0;
@@ -69,8 +71,8 @@ void flying(Grenade &grenade, Character &character, float deltaTime, float start
     startAngle = character.hand.getRotation();
     grenade.position = grenade.sprite.getPosition();
     grenade.time += deltaTime * 10;
-    grenade.speed.x = -2 * JUMP_START * std::cos(startAngle * M_PI / 180);
-    float nextY = character.startY - 2 * JUMP_START * std::sin(startAngle * M_PI / 180) * grenade.time + GRAVITY * std::pow(grenade.time, 2) * 0.5;
+    grenade.speed.x = GRENADE_MULTIPILER.x * JUMP_START * std::cos(startAngle * M_PI / 180);
+    float nextY = character.startY + GRENADE_MULTIPILER.y * JUMP_START * std::sin(startAngle * M_PI / 180) * grenade.time + GRAVITY * std::pow(grenade.time, 2) * 0.5;
     grenade.position.y = nextY;
     grenade.position.x += grenade.speed.x * deltaTime;
     if ((grenade.position.y >= WINDOW_HEIGHT - grenade.texture.getSize().y / 10) ||
@@ -83,7 +85,7 @@ void flying(Grenade &grenade, Character &character, float deltaTime, float start
     }
 }
 
-void update(Character &character, Grenade &grenade, float deltaTime, int &isJumped)
+void update(Character &character, Grenade &grenade, float deltaTime, int &isJumped, easyBot &bot, sf::Text &lifeText)
 {
     character.position = character.sprite.getPosition();
     float startAngle;
@@ -91,7 +93,7 @@ void update(Character &character, Grenade &grenade, float deltaTime, int &isJump
     {
         character.speed.x = -100;
         character.sprite.setScale(-1, 1);
-        if (character.position.x < 10)
+        if (character.position.x < character.texture.getSize().x / 2)
         {
             character.sprite.setScale(1, 1);
             character.speed.x = -character.speed.x;
@@ -102,7 +104,7 @@ void update(Character &character, Grenade &grenade, float deltaTime, int &isJump
     {
         character.speed.x = 100;
         character.sprite.setScale(1, 1);
-        if (character.position.x > WINDOW_WIDTH - 10)
+        if (character.position.x > WINDOW_WIDTH - character.texture.getSize().x / 2)
         {
             character.sprite.setScale(-1, 1);
             character.speed.x = -character.speed.x;
@@ -115,22 +117,20 @@ void update(Character &character, Grenade &grenade, float deltaTime, int &isJump
     }
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Tab))
     {
-        character.position = {WINDOW_WIDTH / 2, WINDOW_HEIGHT - 50};
+        character.position = {WINDOW_WIDTH / 2, WINDOW_HEIGHT - float(character.texture.getSize().y / 2)};
         character.hand.setRotation(0);
         character.sprite.setScale(1, 1);
+        character.lifeCount = 5;
+        bot.isAlive = false;
+        bot.sprite.setPosition(HEAP);
         isJumped = 0;
     }
     if (sf::Mouse::isButtonPressed(sf::Mouse::Right))
     {
         if (!grenade.isFlying)
         {
-            grenade.isStartAngleChanged = false;
             grenade.sprite.setPosition(character.sprite.getPosition());
             grenade.isFlying = true;
-        }
-        if (!grenade.isStartAngleChanged)
-        {
-            startAngle = character.hand.getRotation();
         }
     }
     if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
@@ -148,7 +148,7 @@ void update(Character &character, Grenade &grenade, float deltaTime, int &isJump
     }
     else
     {
-        character.sword.setPosition(200, 200);
+        character.sword.setPosition(HEAP);
     }
     if ((grenade.isFlying) && (sf::Keyboard::isKeyPressed(sf::Keyboard::F)))
     {
@@ -169,6 +169,7 @@ void update(Character &character, Grenade &grenade, float deltaTime, int &isJump
     grenade.sprite.setPosition(grenade.position);
     character.sprite.setPosition(character.position);
     character.hand.setPosition(character.position);
+    lifeText.setString("Health:" + std::to_string(character.lifeCount));
 }
 
 void initCharacter(Character &character)
@@ -176,9 +177,9 @@ void initCharacter(Character &character)
     character.texture.loadFromFile("./game/cat.png");
     character.sprite.setTexture(character.texture);
     character.sprite.setOrigin(character.texture.getSize().x / 2, character.texture.getSize().y / 2);
-    character.sprite.setPosition(WINDOW_WIDTH / 2, WINDOW_HEIGHT - 50);
+    character.sprite.setPosition(WINDOW_WIDTH / 2, WINDOW_HEIGHT - float(character.texture.getSize().y / 2));
     character.startY = character.sprite.getPosition().y;
-    character.hand.setSize({40, 10});
+    character.hand.setSize({30, 10});
     character.hand.setOrigin(0, 5);
     character.hand.setPosition(character.sprite.getPosition());
     character.hand.setFillColor(sf::Color(52, 101, 52));
@@ -186,7 +187,7 @@ void initCharacter(Character &character)
     character.swordTexture.loadFromFile("./game/sword.png");
     character.sword.setTexture(character.swordTexture);
     character.sword.setOrigin(0, 5);
-    character.life_count = 5;
+    character.lifeCount = 5;
     character.isImmune = false;
 }
 
@@ -199,51 +200,51 @@ void initGrenade(Grenade &grenade)
     grenade.isFlying = false;
 }
 
-void initBot(Ezbot &ezbot)
+void initBot(easyBot &easyBot)
 {
-    ezbot.texture.loadFromFile("./game/another cat.png");
-    ezbot.sprite.setTexture(ezbot.texture);
-    ezbot.sprite.setOrigin(ezbot.texture.getSize().x / 2, ezbot.texture.getSize().y / 2);
-    ezbot.sprite.setPosition(100, 100);
-    ezbot.isAlive = false;
-    ezbot.speed.x = 50;
+    easyBot.texture.loadFromFile("./game/another cat.png");
+    easyBot.sprite.setTexture(easyBot.texture);
+    easyBot.sprite.setOrigin(easyBot.texture.getSize().x / 2, easyBot.texture.getSize().y / 2);
+    easyBot.sprite.setPosition(HEAP);
+    easyBot.isAlive = false;
+    easyBot.speed.x = 50;
 }
 
-void spawnSomeBotz(Ezbot &ezbot, float deltaTime, sf::Vector2f spawnPoint)
+void spawnSomeBots(easyBot &easyBot, float deltaTime)
 {
-    ezbot.time += deltaTime;
-    float deltaBot = remainder(ezbot.time, botSpawnTime);
-    if (((deltaBot > -0.01) && (deltaBot < 0.01)) && (ezbot.isAlive == false))
+    easyBot.time += deltaTime;
+    float deltaBot = remainder(easyBot.time, BOT_SPAWN_TIME);
+    if (((deltaBot > -0.01) && (deltaBot < 0.01)) && (easyBot.isAlive == false))
     {
-        ezbot.sprite.setPosition(spawnPoint);
-        ezbot.isAlive = true;
+        easyBot.sprite.setPosition(SPAWN_POINTS[0]);
+        easyBot.isAlive = true;
     }
 }
 
-void botBrain(Ezbot &ezbot, Character &character, float deltaTime)
+void botBrain(easyBot &easyBot, Character &character, float deltaTime)
 {
-    ezbot.distanse.x = character.sprite.getPosition().x - ezbot.sprite.getPosition().x;
-    if ((ezbot.isAlive == true) && (ezbot.distanse.x != 0))
+    easyBot.distance = character.sprite.getPosition() - easyBot.sprite.getPosition();
+    if ((easyBot.isAlive == true) && (easyBot.distance.x != 0))
     {
-        ezbot.position = ezbot.sprite.getPosition();
-        if (ezbot.distanse.x < 0)
+        easyBot.position = easyBot.sprite.getPosition();
+        if (easyBot.distance.x < 0)
         {
-            ezbot.sprite.setScale(-1, 1);
-            ezbot.position.x = ezbot.position.x - ezbot.speed.x * deltaTime;
+            easyBot.sprite.setScale(-1, 1);
+            easyBot.position.x = easyBot.position.x - easyBot.speed.x * deltaTime;
         }
         else
         {
-            if (ezbot.sprite.getScale().x == -1)
+            if (easyBot.sprite.getScale().x == -1)
             {
-                ezbot.sprite.setScale(1, 1);
+                easyBot.sprite.setScale(1, 1);
             };
-            ezbot.position.x = ezbot.position.x + ezbot.speed.x * deltaTime;
+            easyBot.position.x = easyBot.position.x + easyBot.speed.x * deltaTime;
         }
-        ezbot.sprite.setPosition(ezbot.position);
+        easyBot.sprite.setPosition(easyBot.position);
     }
-    if ((std::abs(ezbot.distanse.x) <= (character.texture.getSize().x + ezbot.texture.getSize().x)) && (character.isImmune == false))
+    if ((std::abs(easyBot.distance.x) <= (character.texture.getSize().x + easyBot.texture.getSize().x)) && (character.isImmune == false))
     {
-        character.life_count = character.life_count - 1;
+        character.lifeCount = character.lifeCount - 1;
         character.isImmune = true;
     }
     if ((character.immuneTime >= 0) && (character.immuneTime <= 3.0) && (character.isImmune == true))
@@ -255,15 +256,15 @@ void botBrain(Ezbot &ezbot, Character &character, float deltaTime)
         character.isImmune = false;
         character.immuneTime = 0;
     }
-    if ((character.sprite.getScale().x == 1) && (ezbot.distanse.x < 0) && (std::abs(ezbot.distanse.x) < 0.4 * character.swordTexture.getSize().x) && (character.sword.getPosition() == character.sprite.getPosition()))
+    if ((character.sprite.getScale().x == 1) && (easyBot.distance.x < 0) && (std::abs(easyBot.distance.x) < 0.4 * character.swordTexture.getSize().x) && (character.sword.getPosition() == character.sprite.getPosition()))
     {
-        ezbot.isAlive = false;
-        ezbot.sprite.setPosition(100, 100);
+        easyBot.isAlive = false;
+        easyBot.sprite.setPosition(HEAP);
     }
-    if ((character.sprite.getScale().x == -1) && (ezbot.distanse.x > 0) && (std::abs(ezbot.distanse.x) < 0.4 * character.swordTexture.getSize().x) && (character.sword.getPosition() == character.sprite.getPosition()))
+    if ((character.sprite.getScale().x == -1) && (easyBot.distance.x > 0) && (std::abs(easyBot.distance.x) < 0.4 * character.swordTexture.getSize().x) && (character.sword.getPosition() == character.sprite.getPosition()))
     {
-        ezbot.isAlive = false;
-        ezbot.sprite.setPosition(100, 100);
+        easyBot.isAlive = false;
+        easyBot.sprite.setPosition(HEAP);
     }
 }
 
@@ -274,7 +275,6 @@ float toDegrees(float radians)
 
 void onMouseMove(sf::Event::MouseMoveEvent &event, sf::Vector2f &mousePosition, Character &character, Grenade &grenade)
 {
-    grenade.isStartAngleChanged = true;
     mousePosition = {float(event.x), float(event.y)};
     sf::Vector2f delta = mousePosition - character.hand.getPosition();
     character.angle = toDegrees(atan2(delta.y, delta.x));
@@ -305,9 +305,23 @@ int main()
     initCharacter(character);
     Grenade grenade;
     initGrenade(grenade);
-
-    Ezbot ezbot;
-    initBot(ezbot);
+    easyBot easyBot;
+    initBot(easyBot);
+    sf::Font font;
+    font.loadFromFile("./resources/arial.ttf");
+    sf::Text deathText;
+    deathText.setFont(font);
+    deathText.setString("YOU DIED");
+    deathText.setCharacterSize(72);
+    deathText.setFillColor(sf::Color::Red);
+    const sf::FloatRect deathTextBounds = deathText.getLocalBounds();
+    deathText.setOrigin({deathTextBounds.width / 2, deathTextBounds.height / 2});
+    deathText.setPosition({WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2});
+    sf::Text lifeText;
+    lifeText.setFont(font);
+    lifeText.setPosition({0, 0});
+    lifeText.setCharacterSize(24);
+    lifeText.setFillColor(sf::Color::Black);
 
     sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Game testing screen");
     window.setFramerateLimit(60);
@@ -317,7 +331,7 @@ int main()
         sf::Event event;
         while (window.pollEvent(event))
         {
-            if ((event.type == sf::Event::Closed) || (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)) || (character.life_count <= 0))
+            if ((event.type == sf::Event::Closed) || (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape)))
             {
                 window.close();
             }
@@ -329,23 +343,32 @@ int main()
 
         float deltaTime = clock.restart().asSeconds();
 
-        spawnSomeBotz(ezbot, deltaTime, spawnPoint);
-        update(character, grenade, deltaTime, isJumped);
-        botBrain(ezbot, character, deltaTime);
-        window.clear(sf::Color(255, 255, 255));
-        window.draw(character.sprite);
-        if (ezbot.isAlive)
+        spawnSomeBots(easyBot, deltaTime);
+        update(character, grenade, deltaTime, isJumped, easyBot, lifeText);
+        botBrain(easyBot, character, deltaTime);
+        window.clear(sf::Color::Black);
+        if (character.lifeCount > 0)
         {
-            window.draw(ezbot.sprite);
+            window.clear(sf::Color::White);
+            if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
+            {
+                window.draw(character.sword);
+            }
+            window.draw(character.sprite);
+            if (easyBot.isAlive)
+            {
+                window.draw(easyBot.sprite);
+            }
+            if (grenade.isFlying)
+            {
+                window.draw(grenade.sprite);
+            }
+            window.draw(character.hand);
+            window.draw(lifeText);
         }
-        if (grenade.isFlying)
+        else
         {
-            window.draw(grenade.sprite);
-        }
-        window.draw(character.hand);
-        if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
-        {
-            window.draw(character.sword);
+            window.draw(deathText);
         }
         window.display();
     }
