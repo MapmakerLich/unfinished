@@ -7,16 +7,31 @@
 #include <iostream>
 
 constexpr float GRAVITY = 10.0;
-constexpr float JUMP_START = -50.0;
-const sf::Vector2f GRENADE_MULTIPILER = {-3.f, -1.f};
+constexpr float JUMP_START = -600.0;
+const sf::Vector2f GRENADE_MULTIPILER = {-0.6f, -0.2f};
 const sf::Vector2f HEAP = {800, 800};
 constexpr unsigned WINDOW_HEIGHT = 600;
 constexpr unsigned WINDOW_WIDTH = 800;
 constexpr unsigned MAX_HAND_ANGLE = 85;
 constexpr float BOT_SPAWN_TIME = 10.0;
-sf::Vector2f SPAWN_POINTS[5] = {{100, 560}, {0, 0}, {0, 0}, {0, 0}, {0, 0}};
+constexpr float WIN_TIME = 900;
+const sf::Vector2f SPAWN_POINTS[10] = {{40, 550}, {80, 550}, {120, 550}, {160, 550}, {200, 550}, {760, 550}, {720, 550}, {680, 550}, {640, 550}, {600, 550}};
 
-struct easyBot
+struct GameCondintion
+{
+    bool isInMenu;
+    bool isInGame;
+    bool didWin;
+    bool didDied;
+};
+
+struct Platform
+{
+    sf::Texture texture;
+    sf::Sprite sprite;
+};
+
+struct EasyBot
 {
     sf::Texture texture;
     sf::Sprite sprite;
@@ -37,11 +52,13 @@ struct Character
     sf::Vector2f position;
     sf::Vector2f speed;
     bool isImmune;
-    float time = 0;
     float startY;
     float angle;
     float immuneTime = 0;
     int lifeCount;
+    int score;
+    float timeAlive = 0;
+    int isJumped;
 };
 
 struct Grenade
@@ -54,15 +71,14 @@ struct Grenade
     bool isFlying;
 };
 
-void jumping(Character &character, float deltaTime, int &isJumped)
+void jumping(Character &character, float deltaTime)
 {
-    character.time += deltaTime * 10;
-    float nextY = character.startY + JUMP_START * character.time + GRAVITY * std::pow(character.time, 2) * 0.5;
-    character.position.y = nextY;
+    character.speed.y += GRAVITY;
+    character.position.y += character.speed.y * deltaTime;
     if (character.position.y >= WINDOW_HEIGHT - character.texture.getSize().y / 2)
     {
-        character.time = 0;
-        isJumped = 0;
+        character.speed.y = 0;
+        character.isJumped = 0;
     }
 }
 
@@ -85,45 +101,39 @@ void flying(Grenade &grenade, Character &character, float deltaTime, float start
     }
 }
 
-void update(Character &character, Grenade &grenade, float deltaTime, int &isJumped, easyBot &bot, sf::Text &lifeText)
+void update(Character &character, Grenade &grenade, float deltaTime, std::vector<EasyBot> &vectorOfBots, sf::Text &lifeText, sf::Text &killText, Platform &platform)
 {
     character.position = character.sprite.getPosition();
     float startAngle;
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
     {
-        character.speed.x = -100;
+        character.speed.x = -200;
         character.sprite.setScale(-1, 1);
         if (character.position.x < character.texture.getSize().x / 2)
         {
             character.sprite.setScale(1, 1);
             character.speed.x = -character.speed.x;
         }
-        character.position += character.speed * deltaTime;
+        character.position.x += character.speed.x * deltaTime;
     }
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::D))
     {
-        character.speed.x = 100;
+        character.speed.x = 200;
         character.sprite.setScale(1, 1);
         if (character.position.x > WINDOW_WIDTH - character.texture.getSize().x / 2)
         {
             character.sprite.setScale(-1, 1);
             character.speed.x = -character.speed.x;
         }
-        character.position += character.speed * deltaTime;
+        character.position.x += character.speed.x * deltaTime;
     }
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
     {
-        isJumped = 1;
-    }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Tab))
-    {
-        character.position = {WINDOW_WIDTH / 2, WINDOW_HEIGHT - float(character.texture.getSize().y / 2)};
-        character.hand.setRotation(0);
-        character.sprite.setScale(1, 1);
-        character.lifeCount = 5;
-        bot.isAlive = false;
-        bot.sprite.setPosition(HEAP);
-        isJumped = 0;
+        if (character.isJumped == 0)
+        {
+            character.speed.y = JUMP_START;
+        }
+        character.isJumped = 1;
     }
     if (sf::Mouse::isButtonPressed(sf::Mouse::Right))
     {
@@ -152,24 +162,39 @@ void update(Character &character, Grenade &grenade, float deltaTime, int &isJump
     }
     if ((grenade.isFlying) && (sf::Keyboard::isKeyPressed(sf::Keyboard::F)))
     {
-        character.sprite.setPosition(grenade.sprite.getPosition());
-        character.hand.setPosition(grenade.sprite.getPosition());
+        character.position = grenade.sprite.getPosition();
+        character.isJumped = 2;
         grenade.isFlying = false;
         grenade.time = 0;
-        grenade.sprite.setPosition(character.sprite.getPosition());
+        grenade.position = character.position;
     }
-    if (isJumped == 1)
+    if ((character.isJumped == 2) && (character.position.y != WINDOW_HEIGHT - character.texture.getSize().y / 2))
     {
-        jumping(character, deltaTime, isJumped);
+        character.speed.y = 0;
+        character.isJumped = 1;
+    }
+    if ((character.position.y + character.texture.getSize().y / 2 >= platform.sprite.getPosition().y - platform.texture.getSize().y / 2) && (character.speed.y > 0))
+    {
+        character.isJumped = 0;
+    }
+    if (character.isJumped == 1)
+    {
+        jumping(character, deltaTime);
     }
     if (grenade.isFlying)
     {
         flying(grenade, character, deltaTime, startAngle);
     }
+    if ((character.isJumped == 0) && (sf::Keyboard::isKeyPressed(sf::Keyboard::S)))
+    {
+        character.position.y = WINDOW_HEIGHT - character.texture.getSize().y / 2;
+    }
     grenade.sprite.setPosition(grenade.position);
     character.sprite.setPosition(character.position);
     character.hand.setPosition(character.position);
+    character.timeAlive += deltaTime;
     lifeText.setString("Health:" + std::to_string(character.lifeCount));
+    killText.setString("Score:" + std::to_string((character.score * 10 / (6 - character.lifeCount)) + int(character.timeAlive)));
 }
 
 void initCharacter(Character &character)
@@ -189,6 +214,7 @@ void initCharacter(Character &character)
     character.sword.setOrigin(0, 5);
     character.lifeCount = 5;
     character.isImmune = false;
+    character.score = 0;
 }
 
 void initGrenade(Grenade &grenade)
@@ -200,28 +226,28 @@ void initGrenade(Grenade &grenade)
     grenade.isFlying = false;
 }
 
-void initBot(easyBot &easyBot)
+void initBot(EasyBot &easyBot)
 {
     easyBot.texture.loadFromFile("./game/another cat.png");
     easyBot.sprite.setTexture(easyBot.texture);
     easyBot.sprite.setOrigin(easyBot.texture.getSize().x / 2, easyBot.texture.getSize().y / 2);
     easyBot.sprite.setPosition(HEAP);
     easyBot.isAlive = false;
-    easyBot.speed.x = 50;
+    easyBot.speed.x = 100;
 }
 
-void spawnSomeBots(easyBot &easyBot, float deltaTime)
+void spawnSomeBots(EasyBot &easyBot, float deltaTime, int i)
 {
     easyBot.time += deltaTime;
     float deltaBot = remainder(easyBot.time, BOT_SPAWN_TIME);
     if (((deltaBot > -0.01) && (deltaBot < 0.01)) && (easyBot.isAlive == false))
     {
-        easyBot.sprite.setPosition(SPAWN_POINTS[0]);
+        easyBot.sprite.setPosition(SPAWN_POINTS[i]);
         easyBot.isAlive = true;
     }
 }
 
-void botBrain(easyBot &easyBot, Character &character, float deltaTime)
+void botBrain(EasyBot &easyBot, Character &character, float deltaTime)
 {
     easyBot.distance = character.sprite.getPosition() - easyBot.sprite.getPosition();
     if ((easyBot.isAlive == true) && (easyBot.distance.x != 0))
@@ -242,7 +268,7 @@ void botBrain(easyBot &easyBot, Character &character, float deltaTime)
         }
         easyBot.sprite.setPosition(easyBot.position);
     }
-    if ((std::abs(easyBot.distance.x) <= (character.texture.getSize().x + easyBot.texture.getSize().x)) && (character.isImmune == false))
+    if ((std::abs(easyBot.distance.x) <= (character.texture.getSize().x / 2 + easyBot.texture.getSize().x / 2)) && (std::abs(easyBot.distance.y) <= (character.texture.getSize().y / 2 + easyBot.texture.getSize().y / 2)) && (character.isImmune == false))
     {
         character.lifeCount = character.lifeCount - 1;
         character.isImmune = true;
@@ -260,11 +286,13 @@ void botBrain(easyBot &easyBot, Character &character, float deltaTime)
     {
         easyBot.isAlive = false;
         easyBot.sprite.setPosition(HEAP);
+        character.score += 1;
     }
     if ((character.sprite.getScale().x == -1) && (easyBot.distance.x > 0) && (std::abs(easyBot.distance.x) < 0.4 * character.swordTexture.getSize().x) && (character.sword.getPosition() == character.sprite.getPosition()))
     {
         easyBot.isAlive = false;
         easyBot.sprite.setPosition(HEAP);
+        character.score += 1;
     }
 }
 
@@ -294,22 +322,49 @@ void onMouseMove(sf::Event::MouseMoveEvent &event, sf::Vector2f &mousePosition, 
     }
 }
 
-int main()
+void redrawFrame(sf::RenderWindow &window, std::vector<EasyBot> &vectorOfBots, Character &character, Grenade &grenade, sf::Text &lifeText, sf::Text &deathText, sf::Text &killText, sf::Text &winText, Platform &platform)
 {
-    sf::Clock clock;
+    window.clear();
+    if ((character.lifeCount > 0) && (character.timeAlive < WIN_TIME))
+    {
+        window.clear(sf::Color::White);
+        window.draw(platform.sprite);
+        if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
+        {
+            window.draw(character.sword);
+        }
+        window.draw(character.sprite);
+        for (int i = 0; i < vectorOfBots.size(); ++i)
+        {
+            if (vectorOfBots[i].isAlive)
+            {
+                window.draw(vectorOfBots[i].sprite);
+            }
+        }
+        if (grenade.isFlying)
+        {
+            window.draw(grenade.sprite);
+        }
+        window.draw(character.hand);
+        window.draw(lifeText);
+    }
+    else
+    {
+        if (character.lifeCount <= 0)
+        {
+            window.draw(deathText);
+        }
+        else
+        {
+            window.draw(winText);
+        }
+    }
+    window.draw(killText);
+    window.display();
+}
 
-    int isJumped = 0;
-    sf::Vector2f mousePosition;
-
-    Character character;
-    initCharacter(character);
-    Grenade grenade;
-    initGrenade(grenade);
-    easyBot easyBot;
-    initBot(easyBot);
-    sf::Font font;
-    font.loadFromFile("./resources/arial.ttf");
-    sf::Text deathText;
+void initText(sf::Text &lifeText, sf::Text &deathText, sf::Text &killText, sf::Text &winText, sf::Font &font)
+{
     deathText.setFont(font);
     deathText.setString("YOU DIED");
     deathText.setCharacterSize(72);
@@ -317,11 +372,55 @@ int main()
     const sf::FloatRect deathTextBounds = deathText.getLocalBounds();
     deathText.setOrigin({deathTextBounds.width / 2, deathTextBounds.height / 2});
     deathText.setPosition({WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2});
-    sf::Text lifeText;
     lifeText.setFont(font);
     lifeText.setPosition({0, 0});
     lifeText.setCharacterSize(24);
     lifeText.setFillColor(sf::Color::Black);
+    killText.setFont(font);
+    killText.setCharacterSize(24);
+    killText.setPosition({0, 25});
+    killText.setFillColor(sf::Color::Green);
+    winText.setFont(font);
+    winText.setString("VICTORY");
+    winText.setCharacterSize(72);
+    winText.setFillColor(sf::Color::Green);
+    const sf::FloatRect winTextBounds = winText.getLocalBounds();
+    winText.setOrigin({winTextBounds.width / 2, winTextBounds.height / 2});
+    winText.setPosition({WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2});
+}
+
+void initPlatform(Platform &platform)
+{
+    platform.texture.loadFromFile("./game/platform.png");
+    platform.sprite.setTexture(platform.texture);
+    platform.sprite.setOrigin(platform.texture.getSize().x / 2, platform.texture.getSize().y / 2);
+    platform.sprite.setPosition({WINDOW_WIDTH / 2, WINDOW_HEIGHT * 2 / 3});
+}
+
+int main()
+{
+    sf::Clock clock;
+
+    sf::Vector2f mousePosition;
+
+    Character character;
+    initCharacter(character);
+    Grenade grenade;
+    initGrenade(grenade);
+    Platform platform;
+    initPlatform(platform);
+    std::vector<EasyBot> vectorOfBots(10);
+    for (int i = 0; i < vectorOfBots.size(); ++i)
+    {
+        initBot(vectorOfBots[i]);
+    }
+    sf::Font font;
+    font.loadFromFile("./resources/arial.ttf");
+    sf::Text lifeText;
+    sf::Text deathText;
+    sf::Text killText;
+    sf::Text winText;
+    initText(lifeText, deathText, killText, winText, font);
 
     sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Game testing screen");
     window.setFramerateLimit(60);
@@ -343,33 +442,35 @@ int main()
 
         float deltaTime = clock.restart().asSeconds();
 
-        spawnSomeBots(easyBot, deltaTime);
-        update(character, grenade, deltaTime, isJumped, easyBot, lifeText);
-        botBrain(easyBot, character, deltaTime);
-        window.clear(sf::Color::Black);
-        if (character.lifeCount > 0)
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Tab))
         {
-            window.clear(sf::Color::White);
-            if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
+            character.sprite.setPosition({WINDOW_WIDTH / 2, WINDOW_HEIGHT - float(character.texture.getSize().y / 2)});
+            character.hand.setRotation(0);
+            character.sprite.setScale(1, 1);
+            character.lifeCount = 5;
+            for (int i = 0; i < vectorOfBots.size(); ++i)
             {
-                window.draw(character.sword);
+                vectorOfBots[i].isAlive = false;
+                vectorOfBots[i].sprite.setPosition(HEAP);
+                vectorOfBots[i].time = 0;
             }
-            window.draw(character.sprite);
-            if (easyBot.isAlive)
-            {
-                window.draw(easyBot.sprite);
-            }
-            if (grenade.isFlying)
-            {
-                window.draw(grenade.sprite);
-            }
-            window.draw(character.hand);
-            window.draw(lifeText);
+            character.isJumped = 0;
+            character.speed.y = 0;
+            character.score = 0;
+            character.timeAlive = 0;
         }
-        else
+        if ((character.lifeCount > 0) && (character.timeAlive < WIN_TIME))
         {
-            window.draw(deathText);
+            update(character, grenade, deltaTime, vectorOfBots, lifeText, killText, platform);
+            for (int i = 0; i < vectorOfBots.size(); ++i)
+            {
+                botBrain(vectorOfBots[i], character, deltaTime);
+                if (vectorOfBots.size() <= 10)
+                {
+                    spawnSomeBots(vectorOfBots[i], deltaTime, i);
+                }
+            }
         }
-        window.display();
+        redrawFrame(window, vectorOfBots, character, grenade, lifeText, deathText, killText, winText, platform);
     }
 }
