@@ -1,7 +1,8 @@
 # unfinished
 All unfinished projects by me
 
-Project 1 - 75%
+Project 1 - 85%
+Collab with https://github.com/GooseGame
 Game: "Colosseum of Fools"
 
 MindMap: https://www.mindmeister.com/ru/1010107544/colosseum-of-fools
