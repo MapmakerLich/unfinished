@@ -1,7 +1,7 @@
 # unfinished
 All unfinished projects by me
 
-Project 1 - 85%
+Project 1 - 85% (MVP finished, menu and bot secondary algorithm in progress)
 
 Collab with https://github.com/GooseGame
 
