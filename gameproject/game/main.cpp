@@ -9,13 +9,31 @@
 constexpr float GRAVITY = 10.0;
 constexpr float JUMP_START = -600.0;
 constexpr float CANON_Y = 540;
-const sf::Vector2f HEAP = {800, 800};
 constexpr float GRENADE_MULTIPLIER = 0.15f;
 constexpr unsigned WINDOW_HEIGHT = 600;
 constexpr unsigned WINDOW_WIDTH = 800;
+const sf::Vector2f HEAP = {2 * WINDOW_WIDTH, 2 * WINDOW_HEIGHT};
 constexpr float BOT_SPAWN_TIME = 10.0;
 constexpr float WIN_TIME = 900;
 const float SPAWN_POINTS[10] = {40, 80, 120, 160, 200, 760, 720, 680, 640, 600};
+const float BOT_SPEED = 100;
+
+struct Background
+{
+    sf::Texture texture;
+    sf::Sprite sprite;
+};
+
+struct Texts
+{
+    sf::Font font;
+    sf::Text lifeText;
+    sf::Text deathText;
+    sf::Text killText;
+    sf::Text winText;
+    sf::Text menuText;
+    sf::Text controlsText;
+};
 
 struct GameCondintion
 {
@@ -103,13 +121,12 @@ void flying(Grenade &grenade, Canon &canon, float deltaTime)
     }
 }
 
-void update(Character &character, Grenade &grenade, Canon &canon, float deltaTime, std::vector<EasyBot> &vectorOfBots, sf::Text &lifeText, sf::Text &killText, Platform &platform)
+void update(Character &character, Grenade &grenade, Canon &canon, float deltaTime, std::vector<EasyBot> &vectorOfBots, Texts &texts, Platform &platform)
 {
     character.position = character.sprite.getPosition();
-    float startAngle;
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
     {
-        character.speed.x = -200;
+        character.speed.x = -2 * BOT_SPEED;
         character.sprite.setScale(-1, 1);
         if (character.position.x < character.texture.getSize().x / 2)
         {
@@ -120,7 +137,7 @@ void update(Character &character, Grenade &grenade, Canon &canon, float deltaTim
     }
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::D))
     {
-        character.speed.x = 200;
+        character.speed.x = 2 * BOT_SPEED;
         character.sprite.setScale(1, 1);
         if (character.position.x > WINDOW_WIDTH - character.texture.getSize().x / 2)
         {
@@ -203,6 +220,10 @@ void update(Character &character, Grenade &grenade, Canon &canon, float deltaTim
         character.position.y = WINDOW_HEIGHT - character.texture.getSize().y / 2;
         platform.isCharacterOnPlatform = false;
     }
+    if ((character.position.y == WINDOW_HEIGHT - character.texture.getSize().y / 2) && (platform.isCharacterOnPlatform))
+    {
+        platform.isCharacterOnPlatform = false;
+    }
     grenade.sprite.setPosition(grenade.position);
     character.sprite.setPosition(character.position);
     if (grenade.isFlying == false)
@@ -210,8 +231,8 @@ void update(Character &character, Grenade &grenade, Canon &canon, float deltaTim
         grenade.sprite.setPosition(canon.fixer.getPosition());
     }
     character.timeAlive += deltaTime;
-    lifeText.setString("Health:" + std::to_string(character.lifeCount));
-    killText.setString("Score:" + std::to_string((character.score * 10 / (6 - character.lifeCount)) + int(character.timeAlive)));
+    texts.lifeText.setString("Health:" + std::to_string(character.lifeCount));
+    texts.killText.setString("Score:" + std::to_string((character.score * 10 / (6 - character.lifeCount)) + int(character.timeAlive)));
 }
 
 void initCharacter(Character &character)
@@ -253,8 +274,15 @@ void initBot(EasyBot &easyBot)
     easyBot.sprite.setOrigin(easyBot.texture.getSize().x / 2, easyBot.texture.getSize().y / 2);
     easyBot.sprite.setPosition(HEAP);
     easyBot.isAlive = false;
-    easyBot.speed.x = 100;
+    easyBot.speed.x = BOT_SPEED;
     easyBot.isJumpable = false;
+}
+
+void initBackground(Background &background)
+{
+    background.texture.loadFromFile("./resources/arena.png");
+    background.sprite.setTexture(background.texture);
+    background.sprite.setPosition(0, 0);
 }
 
 void spawnSomeBots(EasyBot &easyBot, float deltaTime, int i)
@@ -355,12 +383,16 @@ void onMouseMove(sf::Event::MouseMoveEvent &event, sf::Vector2f &mousePosition, 
     canon.fixer.setPosition(canon.position);
 }
 
-void redrawFrame(sf::RenderWindow &window, std::vector<EasyBot> &vectorOfBots, Character &character, Grenade &grenade, Canon &canon, sf::Text &lifeText, sf::Text &deathText, sf::Text &killText, sf::Text &winText, Platform &platform)
+void redrawFrame(sf::RenderWindow &window, std::vector<EasyBot> &vectorOfBots, Character &character, Grenade &grenade, Canon &canon, Texts &texts, Platform &platform, Background &background, GameCondintion &condition)
 {
     window.clear();
-    if ((character.lifeCount > 0) && (character.timeAlive < WIN_TIME))
+    window.draw(background.sprite);
+    if (condition.isInGame)
     {
         window.clear(sf::Color::White);
+        background.texture.loadFromFile("./resources/ingame.png");
+        background.sprite.setTexture(background.texture);
+        window.draw(background.sprite);
         window.draw(platform.sprite);
         if (sf::Mouse::isButtonPressed(sf::Mouse::Left))
         {
@@ -379,47 +411,56 @@ void redrawFrame(sf::RenderWindow &window, std::vector<EasyBot> &vectorOfBots, C
             window.draw(grenade.sprite);
         }
         window.draw(canon.fixer);
-        window.draw(lifeText);
+        window.draw(texts.lifeText);
+        window.draw(texts.killText);
     }
     else
     {
-        if (character.lifeCount <= 0)
+        if (condition.didDied)
         {
-            window.draw(deathText);
+            window.draw(texts.deathText);
+            window.draw(texts.killText);
         }
-        else
+        else if (condition.didWin)
         {
-            window.draw(winText);
+            window.draw(texts.winText);
+            window.draw(texts.killText);
         }
     }
-    window.draw(killText);
     window.display();
 }
 
-void initText(sf::Text &lifeText, sf::Text &deathText, sf::Text &killText, sf::Text &winText, sf::Font &font)
+void initText(Texts &texts)
 {
-    deathText.setFont(font);
-    deathText.setString("YOU DIED");
-    deathText.setCharacterSize(72);
-    deathText.setFillColor(sf::Color::Red);
-    const sf::FloatRect deathTextBounds = deathText.getLocalBounds();
-    deathText.setOrigin({deathTextBounds.width / 2, deathTextBounds.height / 2});
-    deathText.setPosition({WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2});
-    lifeText.setFont(font);
-    lifeText.setPosition({0, 0});
-    lifeText.setCharacterSize(24);
-    lifeText.setFillColor(sf::Color::Black);
-    killText.setFont(font);
-    killText.setCharacterSize(24);
-    killText.setPosition({0, 25});
-    killText.setFillColor(sf::Color::Green);
-    winText.setFont(font);
-    winText.setString("VICTORY");
-    winText.setCharacterSize(72);
-    winText.setFillColor(sf::Color::Green);
-    const sf::FloatRect winTextBounds = winText.getLocalBounds();
-    winText.setOrigin({winTextBounds.width / 2, winTextBounds.height / 2});
-    winText.setPosition({WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2});
+    texts.font.loadFromFile("./resources/arial.ttf");
+    texts.deathText.setFont(texts.font);
+    texts.deathText.setString("YOU DIED");
+    texts.deathText.setCharacterSize(72);
+    texts.deathText.setFillColor(sf::Color::Red);
+    const sf::FloatRect deathTextBounds = texts.deathText.getLocalBounds();
+    texts.deathText.setOrigin({deathTextBounds.width / 2, deathTextBounds.height / 2});
+    texts.deathText.setPosition({WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2});
+    texts.lifeText.setFont(texts.font);
+    texts.lifeText.setPosition({0, 0});
+    texts.lifeText.setCharacterSize(24);
+    texts.lifeText.setFillColor(sf::Color::Black);
+    texts.killText.setFont(texts.font);
+    texts.killText.setCharacterSize(24);
+    texts.killText.setPosition({0, 25});
+    texts.killText.setFillColor(sf::Color::Green);
+    texts.winText.setFont(texts.font);
+    texts.winText.setString("VICTORY");
+    texts.winText.setCharacterSize(72);
+    texts.winText.setFillColor(sf::Color::Green);
+    const sf::FloatRect winTextBounds = texts.winText.getLocalBounds();
+    texts.winText.setOrigin({winTextBounds.width / 2, winTextBounds.height / 2});
+    texts.winText.setPosition({WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2});
+    texts.menuText.setFont(texts.font);
+    texts.menuText.setString("Colosseum of Fools");
+    const sf::FloatRect menuTextBounds = texts.menuText.getLocalBounds();
+    texts.menuText.setOrigin({menuTextBounds.width / 2, menuTextBounds.height / 2});
+    texts.menuText.setFillColor(sf::Color::Yellow);
+    texts.menuText.setPosition({WINDOW_HEIGHT / 2, WINDOW_HEIGHT / 2});
 }
 
 void initPlatform(Platform &platform)
@@ -445,6 +486,9 @@ int main()
     initPlatform(platform);
     Canon canon;
     initCanon(canon);
+    Background background;
+    initBackground(background);
+    GameCondintion condition;
     std::vector<EasyBot> vectorOfBots(10);
     for (int i = 0; i < vectorOfBots.size(); ++i)
     {
@@ -454,16 +498,13 @@ int main()
             vectorOfBots[i].isJumpable = true;
         }
     }
-    sf::Font font;
-    font.loadFromFile("./resources/arial.ttf");
-    sf::Text lifeText;
-    sf::Text deathText;
-    sf::Text killText;
-    sf::Text winText;
-    initText(lifeText, deathText, killText, winText, font);
+    Texts texts;
+    initText(texts);
 
     sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Game testing screen");
     window.setFramerateLimit(60);
+
+    condition.isInMenu = true;
 
     while (window.isOpen())
     {
@@ -499,10 +540,29 @@ int main()
             character.timeAlive = 0;
             canon.fixer.setPosition({WINDOW_WIDTH / 2, CANON_Y});
             platform.isCharacterOnPlatform = false;
+            condition.didWin = false;
+            condition.didDied = false;
+            condition.isInMenu = false;
         }
-        if ((character.lifeCount > 0) && (character.timeAlive < WIN_TIME))
+        if ((character.lifeCount > 0) && (character.timeAlive < WIN_TIME) && (!condition.isInMenu))
         {
-            update(character, grenade, canon, deltaTime, vectorOfBots, lifeText, killText, platform);
+            condition.isInGame = true;
+            condition.didWin = false;
+            condition.didDied = false;
+        }
+        if (character.lifeCount <= 0)
+        {
+            condition.didDied = true;
+            condition.isInGame = false;
+        }
+        if (character.timeAlive >= WIN_TIME)
+        {
+            condition.isInGame = false;
+            condition.didWin = true;
+        }
+        if (condition.isInGame)
+        {
+            update(character, grenade, canon, deltaTime, vectorOfBots, texts, platform);
             for (int i = 0; i < vectorOfBots.size(); ++i)
             {
                 botBrain(vectorOfBots[i], character, deltaTime, platform);
@@ -512,6 +572,6 @@ int main()
                 }
             }
         }
-        redrawFrame(window, vectorOfBots, character, grenade, canon, lifeText, deathText, killText, winText, platform);
+        redrawFrame(window, vectorOfBots, character, grenade, canon, texts, platform, background, condition);
     }
 }
