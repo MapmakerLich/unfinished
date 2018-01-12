@@ -13,6 +13,11 @@ void onMouseMove(sf::Event::MouseMoveEvent &event, sf::Vector2f &mousePosition, 
 void redrawFrame(sf::RenderWindow &window, std::vector<EasyBot> &vectorOfBots, Character &character, Grenade &grenade, Canon &canon, Texts &texts, Platform &platform, Background &background, GameCondintion &condition)
 {
     window.clear();
+    if (condition.isInMenu)
+    {
+        background.texture.loadFromFile("./resources/arena.png");
+        background.sprite.setTexture(background.texture);
+    }
     window.draw(background.sprite);
     if (condition.isInGame)
     {
@@ -148,6 +153,9 @@ int main()
     window.setFramerateLimit(60);
 
     condition.isInMenu = true;
+    condition.isInGame = false;
+    condition.didDied = false;
+    condition.didWin = false;
 
     while (window.isOpen())
     {
